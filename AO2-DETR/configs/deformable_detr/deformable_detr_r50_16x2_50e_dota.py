@@ -19,6 +19,7 @@ model = dict(
         norm_cfg=dict(type='BN', requires_grad=False),
         norm_eval=True,
         style='pytorch',
+        # init_cfg=dict(type='Pretrained', checkpoint='/home/pyj/AO2-DETR/pretrain_model/moco_test.pth')),
         init_cfg=dict(type='Pretrained', checkpoint='torchvision://resnet50')),
     neck=dict(
         type='ChannelMapper',
@@ -30,7 +31,7 @@ model = dict(
         num_outs=4),
     bbox_head=dict(
         type='RotatedDeformableDETRHead',
-        num_query=250,
+        num_query=300,
         num_classes=15,
         in_channels=2048,
         sync_cls_avg_factor=True,
@@ -41,8 +42,9 @@ model = dict(
         # ],
         transformer=dict(
             type='RotatedDeformableDetrTransformer',
-            # use_dab=False,
-            two_stage_num_proposals=250,
+            # use_dab=True,
+            # high_dim_query_update = True,
+            two_stage_num_proposals=300,
             encoder=dict(
                 type='DetrTransformerEncoder',
                 num_layers=6,
@@ -57,7 +59,9 @@ model = dict(
                 type='RotatedDeformableDetrTransformerDecoder',
                 num_layers=6,
                 return_intermediate=True,
-                # use_dab=False,
+                # use_dab=True,
+                # high_dim_query_update = True,
+                # embed_dims = 256,
                 transformerlayers=dict(
                     type='DetrTransformerDecoderLayer',
                     attn_cfgs=[
@@ -96,7 +100,7 @@ model = dict(
         loss_bbox=dict(type='L1Loss', loss_weight=2.0),
         reg_decoded_bbox=True,
         # loss_iou=dict(type='GDLoss', loss_type='gwd', loss_weight=5.0)
-        loss_iou=dict(type='RotatedIoULoss', loss_weight=5.0),
+        loss_iou=dict(type='RotatedIoULoss', loss_weight=8.0),
     ),
     # training and testing settings
     train_cfg=dict(
@@ -104,7 +108,7 @@ model = dict(
             type='Rotated_HungarianAssigner',
             cls_cost=dict(type='FocalLossCost', weight=2.0),
             reg_cost=dict(type='RBBoxL1Cost', weight=2.0, box_format='xywha'),
-            iou_cost=dict(type='RotatedIoUCost', iou_mode='iou', weight=5.0)
+            iou_cost=dict(type='RotatedIoUCost', iou_mode='iou', weight=8.0)
             # iou_cost=dict(type='GaussianIoUCost', iou_mode='iou', weight=5.0)
         )),
     test_cfg=dict()
@@ -142,8 +146,12 @@ optimizer = dict(
             'reference_points': dict(lr_mult=0.1)
         }))
 optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))
+# evaluation = dict(interval=1, metric='mAP')
 # learning policy
 lr_config = dict(policy='step', step=[40])
 runner = dict(type='EpochBasedRunner', max_epochs=50)
+checkpoint_config = dict(interval=12)
 find_unused_parameters = True
-work_dir = 'work_dirs/new_refine/'
+# work_dir = '/data/2_data_server/cv-01/ao2_a6000/work_dirs/imp_clsmaxbbox_trainval_300_detFalse/'
+# work_dir = '/data/2_data_server/cv-01/ao2_a6000/work_dirs/imp_deformabledetr_clsmax_bboxtest_300_detFalse/'
+work_dir = '/data/2_data_server/cv-01/ao2_a6000/work_dirs/test/'

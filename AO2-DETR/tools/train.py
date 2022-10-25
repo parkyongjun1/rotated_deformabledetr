@@ -46,9 +46,10 @@ def parse_args():
         nargs='+',
         help='ids of gpus to use '
         '(only applicable to non-distributed training)')
-    parser.add_argument('--seed', type=int, default=None, help='random seed')
+    parser.add_argument('--seed', type=int, default=0, help='random seed')
     parser.add_argument(
         '--deterministic',
+        # default=True,
         action='store_true',
         help='whether to set deterministic options for CUDNN backend.')
     parser.add_argument(

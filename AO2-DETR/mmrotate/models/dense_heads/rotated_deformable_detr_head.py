@@ -264,6 +264,7 @@ class RotatedDeformableDETRHead(RotatedDETRHead):
             #     outputs_coord.append(poly2obb(tmp[i].sigmoid(), 'oc'))
             # outputs_coord = torch.stack(outputs_coord)
             #------------------------
+    
             outputs_coord = tmp.sigmoid()
             outputs_classes.append(outputs_class)
             outputs_coords.append(outputs_coord)
@@ -322,6 +323,7 @@ class RotatedDeformableDETRHead(RotatedDETRHead):
 
         num_dec_layers = len(all_cls_scores)
         all_gt_rbboxes_list = [gt_bboxes_list for _ in range(num_dec_layers)]
+        
         # all_gt_rbboxes_list = [gt_masks for _ in range(num_dec_layers)]
         all_gt_labels_list = [gt_labels_list for _ in range(num_dec_layers)]
         all_gt_bboxes_ignore_list = [
