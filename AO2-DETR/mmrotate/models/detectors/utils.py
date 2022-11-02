@@ -157,15 +157,34 @@ class FeatureRefineModule(nn.Module):
             kernel_size=(1, 5),
             stride=1,
             padding=(0, 2))
+        self.conv_7_1 = nn.Conv2d(
+            in_channels=self.in_channels,
+            out_channels=self.in_channels,
+            kernel_size=(7, 1),
+            stride=1,
+            padding=(3, 0))
+        self.conv_1_7 = nn.Conv2d(
+            in_channels=self.in_channels,
+            out_channels=self.in_channels,
+            kernel_size=(1, 7),
+            stride=1,
+            padding=(0, 3))
         self.conv_1_1 = nn.Conv2d(
             in_channels=self.in_channels,
             out_channels=self.in_channels,
             kernel_size=1)
+        self.relu = nn.ReLU(inplace=True)
+        # self.conv_cat = BasicConv2d(3*out_channel, out_channel, 3, padding=1)
+        # self.conv_res = BasicConv2d(in_channel, out_channel, 1)
+        self.conv_cat = nn.Conv2d(3*self.in_channels, self.in_channels, 3, padding=1)
+        self.conv_res = nn.Conv2d(self.in_channels, self.in_channels, 1)
 
     def init_weights(self):
         """Initialize weights of feature refine module."""
         normal_init(self.conv_5_1, std=0.01)
         normal_init(self.conv_1_5, std=0.01)
+        normal_init(self.conv_7_1, std=0.01)
+        normal_init(self.conv_1_7, std=0.01)
         normal_init(self.conv_1_1, std=0.01)
 
     def forward(self, x, best_rbboxes):
@@ -183,10 +202,18 @@ class FeatureRefineModule(nn.Module):
         for x_scale, best_rbboxes_scale, fr_scale in zip(
                 x, mlvl_rbboxes, self.featmap_strides):
             feat_scale_1 = self.conv_5_1(self.conv_1_5(x_scale))
-            feat_scale_2 = self.conv_1_1(x_scale)
-            feat_scale = feat_scale_1 + feat_scale_2
+            feat_scale_2 = self.conv_7_1(self.conv_1_7(x_scale))
+            feat_scale_3 = self.conv_1_1(x_scale)
+            feat_scale_cat = self.conv_cat(torch.cat((feat_scale_1, feat_scale_2, feat_scale_3), dim=1))
+            feat_scale = self.relu(x_scale + self.conv_res(feat_scale_cat))
             feat_refined_scale = rotated_feature_align(feat_scale,
                                                        best_rbboxes_scale,
                                                        1 / fr_scale)
-            out.append(x_scale + feat_refined_scale)
+            out.append(feat_scale + feat_refined_scale)
+
+            # feat_scale = feat_scale_1 + feat_scale_2
+            # feat_refined_scale = rotated_feature_align(feat_scale,
+            #                                            best_rbboxes_scale,
+            #                                            1 / fr_scale)
+            # out.append(x_scale + feat_refined_scale)
         return out

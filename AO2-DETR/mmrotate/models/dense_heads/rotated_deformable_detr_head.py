@@ -110,6 +110,7 @@ class RotatedDeformableDETRHead(RotatedDETRHead):
         if self.frm_cfgs is not None:
             for i in range(self.num_refine_stages):
                 self.feat_refine_module[i].init_weights()
+                
         if self.loss_cls.use_sigmoid:
             bias_init = bias_init_with_prob(0.01)
             for m in self.cls_branches:
@@ -201,6 +202,7 @@ class RotatedDeformableDETRHead(RotatedDETRHead):
                     first_stage=True
             )
             rois = initial_enc_outputs_coord.detach()
+            
             refine_boxes_batch = []
 
             for j in range(rois.shape[0]):
@@ -215,6 +217,8 @@ class RotatedDeformableDETRHead(RotatedDETRHead):
 
             for i in range(self.num_refine_stages):
                 x_refine = self.feat_refine_module[i](mlvl_feats, refine_boxes_batch)
+               
+            
             hs, init_reference, inter_references, \
             enc_outputs_class, enc_outputs_coord = self.transformer(
                 x_refine,
@@ -224,8 +228,10 @@ class RotatedDeformableDETRHead(RotatedDETRHead):
                 bbox_coder = self.bbox_coder,
                 reg_branches=self.reg_branches if self.with_box_refine else None,  # noqa:E501
                 cls_branches=self.cls_branches if self.as_two_stage else None,  # noqa:E501
-                img_metas=img_metas
+                img_metas=img_metas,
+                first_stage=False
             )
+            
         else:
             hs, init_reference, inter_references, \
             enc_outputs_class, enc_outputs_coord = self.transformer(
@@ -266,15 +272,24 @@ class RotatedDeformableDETRHead(RotatedDETRHead):
             #------------------------
     
             outputs_coord = tmp.sigmoid()
+            ###############
+            # outputs_coord = tmp
+            # outputs_coord[...,:4] = outputs_coord[...,:4].sigmoid()
+            
             outputs_classes.append(outputs_class)
             outputs_coords.append(outputs_coord)
 
         outputs_classes = torch.stack(outputs_classes)
         outputs_coords = torch.stack(outputs_coords)
+        
+        # enc_outputs_coord = torch.cat((enc_outputs_coord[...,:4].sigmoid(),enc_outputs_coord[...,4:5]),-1)
+        
         if self.as_two_stage:
             return outputs_classes, outputs_coords, \
                 enc_outputs_class, \
                 enc_outputs_coord.sigmoid()
+                # torch.cat((enc_outputs_coord[...,:4].sigmoid(),enc_outputs_coord[...,4:5]),-1)
+                
         else:
             return outputs_classes, outputs_coords, \
                 None, None

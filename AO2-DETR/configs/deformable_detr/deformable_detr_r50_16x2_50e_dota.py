@@ -36,10 +36,10 @@ model = dict(
         in_channels=2048,
         sync_cls_avg_factor=True,
         as_two_stage=False,
-        # frm_cfgs=[
-        #     dict(in_channels=256, featmap_strides=[16, 32, 64, 128]),
-        #     dict(in_channels=256, featmap_strides=[16, 32, 64, 128])
-        # ],
+        frm_cfgs=[
+            dict(in_channels=256, featmap_strides=[16, 32, 64, 128]),
+            dict(in_channels=256, featmap_strides=[16, 32, 64, 128])
+        ],
         transformer=dict(
             type='RotatedDeformableDetrTransformer',
             # use_dab=True,
@@ -146,7 +146,7 @@ optimizer = dict(
             'reference_points': dict(lr_mult=0.1)
         }))
 optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))
-# evaluation = dict(interval=1, metric='mAP')
+evaluation = dict(interval=1, metric='mAP')
 # learning policy
 lr_config = dict(policy='step', step=[40])
 runner = dict(type='EpochBasedRunner', max_epochs=50)
@@ -154,4 +154,5 @@ checkpoint_config = dict(interval=12)
 find_unused_parameters = True
 # work_dir = '/data/2_data_server/cv-01/ao2_a6000/work_dirs/imp_clsmaxbbox_trainval_300_detFalse/'
 # work_dir = '/data/2_data_server/cv-01/ao2_a6000/work_dirs/imp_deformabledetr_clsmax_bboxtest_300_detFalse/'
-work_dir = '/data/2_data_server/cv-01/ao2_a6000/work_dirs/test/'
+# work_dir = '/data/2_data_server/cv-01/ao2_a6000/work_dirs/imp_frm_base_modify_train_300_detFalse/'
+work_dir = '/data/2_data_server/cv-01/ao2_a6000/work_dirs/frm_test/'
