@@ -81,6 +81,7 @@ class RotatedDeformableDETRHead(RotatedDETRHead):
         if self.with_box_refine:
             self.cls_branches = _get_clones(fc_cls, num_pred)
             self.reg_branches = _get_clones(reg_branch, num_pred)
+             
         else:
 
             self.cls_branches = nn.ModuleList(
@@ -103,6 +104,7 @@ class RotatedDeformableDETRHead(RotatedDETRHead):
 
         if self.num_patterns > 0:
             self.patterns_embed = nn.Embedding(self.num_patterns, self.embed_dims)
+
 
     def init_weights(self):
         """Initialize weights of the DeformDETR head."""
@@ -160,6 +162,8 @@ class RotatedDeformableDETRHead(RotatedDETRHead):
         mlvl_masks = []
         mlvl_positional_encodings = []
         spatial_shapes = []
+        best_bbox_findex= [180, 70, 25, 25]
+        fm_scale = [128, 64, 32, 16]
         for feat in mlvl_feats:
             bs, c, h, w = feat.shape
             spatial_shape = (h, w)
@@ -169,7 +173,7 @@ class RotatedDeformableDETRHead(RotatedDETRHead):
                               size=feat.shape[-2:]).to(torch.bool).squeeze(0))
             mlvl_positional_encodings.append(
                 self.positional_encoding(mlvl_masks[-1]))
-
+        
         if self.as_two_stage:
             query_embeds = None
         elif self.use_dab:
@@ -204,16 +208,32 @@ class RotatedDeformableDETRHead(RotatedDETRHead):
             rois = initial_enc_outputs_coord.detach()
             
             refine_boxes_batch = []
-
+            
             for j in range(rois.shape[0]):
                 pre_index = 0
                 refine_boxes = []
                 for i in spatial_shapes:
                     end_index = pre_index + i[0]*i[1]
                     tmp = rois[j][pre_index:end_index, :]
+                    tmp[...,:4] = tmp[...,:4]*i[0]
                     pre_index = end_index
                     refine_boxes.append(tmp)
+                
                 refine_boxes_batch.append(refine_boxes)
+
+            ## best bbox filtering
+            
+            # for j in range(rois.shape[0]):
+            #     pre_index = 0
+            #     refine_boxes = []
+            #     for i in range(len(best_bbox_findex)):
+            #         end_index = pre_index + best_bbox_findex[i]
+            #         tmp = rois[j][pre_index:end_index, :]
+            #         pre_index = end_index
+            #         refine_boxes.append(tmp.sigmoid())
+                
+            #     refine_boxes_batch.append(refine_boxes)
+                
 
             for i in range(self.num_refine_stages):
                 x_refine = self.feat_refine_module[i](mlvl_feats, refine_boxes_batch)
@@ -229,8 +249,8 @@ class RotatedDeformableDETRHead(RotatedDETRHead):
                 reg_branches=self.reg_branches if self.with_box_refine else None,  # noqa:E501
                 cls_branches=self.cls_branches if self.as_two_stage else None,  # noqa:E501
                 img_metas=img_metas,
-                first_stage=False
             )
+            
             
         else:
             hs, init_reference, inter_references, \

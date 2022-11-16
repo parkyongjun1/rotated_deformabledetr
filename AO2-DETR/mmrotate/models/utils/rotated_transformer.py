@@ -20,6 +20,7 @@ from torch.nn.init import normal_
 from .builder import ROTATED_TRANSFORMER
 from mmdet.models.utils import Transformer
 from mmdet.models.utils.transformer import inverse_sigmoid
+from mmcv.ops import diff_iou_rotated_2d
 # from mmrotate.core import obb2poly, poly2obb
 # # from mmrotate.core import obb2xyxy
 # from mmdet.core import bbox_cxcywh_to_xyxy
@@ -106,6 +107,10 @@ class RotatedDeformableDetrTransformer(Transformer):
 
         if self.as_two_stage:
             self.enc_output = nn.Linear(self.embed_dims, self.embed_dims)
+            self.enc_output_reg = nn.Linear(5, 256)
+            self.enc_output_pro = nn.Linear(5, 256)
+            self.enc_output_reg_norm = nn.LayerNorm(256)
+            self.enc_output_pro_norm = nn.LayerNorm(256)
             self.enc_output_norm = nn.LayerNorm(self.embed_dims)
             self.pos_trans = nn.Linear(self.embed_dims*2,
                                        self.embed_dims*2)
@@ -140,9 +145,9 @@ class RotatedDeformableDetrTransformer(Transformer):
         # nn.init.uniform_(self.two_stage_wh2_embedding.weight, a=math.log(0.05 / (1 - 0.05)),b=math.log(0.08 / (1 - 0.08)))
         # nn.init.uniform_(self.two_stage_wh3_embedding.weight, a=math.log(0.04 / (1 - 0.04)),b=math.log(0.05 / (1 - 0.05)))
         # nn.init.uniform_(self.two_stage_wh4_embedding.weight, a=math.log(0.04 / (1 - 0.04)),b=math.log(0.05 / (1 - 0.05)))
-        nn.init.uniform_(self.two_stage_wh1_embedding.weight, a=0.40,b=0.70)
-        nn.init.uniform_(self.two_stage_wh2_embedding.weight, a=0.20,b=0.40)
-        nn.init.uniform_(self.two_stage_wh3_embedding.weight, a=0.10,b=0.15)
+        nn.init.uniform_(self.two_stage_wh1_embedding.weight, a=0.36,b=0.44)
+        nn.init.uniform_(self.two_stage_wh2_embedding.weight, a=0.17,b=0.23)
+        nn.init.uniform_(self.two_stage_wh3_embedding.weight, a=0.08,b=0.12)
         nn.init.uniform_(self.two_stage_wh4_embedding.weight, a=0.03,b=0.07)
         nn.init.uniform_(self.two_stage_theta1_embedding.weight, a=0.0,b=(np.pi/2))
         nn.init.uniform_(self.two_stage_theta2_embedding.weight, a=0.0,b=(np.pi/2))
@@ -203,76 +208,76 @@ class RotatedDeformableDetrTransformer(Transformer):
             # 각 layer level 별로 embedding을 줘서 학습?
             # wh를 hxx로 줘서 학습가능하게?
             
-            # if H == 16:
+            if H == 16:
                 
-            #     learnedwh1 = torch.reshape(learnedwh1,(16,16,2))
+                learnedwh1 = torch.reshape(learnedwh1,(16,16,2))
                 
-            #     learnedwh1 = learnedwh1.unsqueeze(0)
-            #     learnedwh1 = learnedwh1.repeat(N,1,1,1)
+                learnedwh1 = learnedwh1.unsqueeze(0)
+                learnedwh1 = learnedwh1.repeat(N,1,1,1)
                 
-            #     learnedtheta1 = torch.reshape(learnedtheta1,(16,16,1))
-            #     learnedtheta1 = learnedtheta1.unsqueeze(0)
-            #     learnedtheta1 = learnedtheta1.repeat(N,1,1,1)
+                # learnedtheta1 = torch.reshape(learnedtheta1,(16,16,1))
+                # learnedtheta1 = learnedtheta1.unsqueeze(0)
+                # learnedtheta1 = learnedtheta1.repeat(N,1,1,1)
 
             #     # wh  = torch.mul(torch.ones_like(grid),(learnedwh1.sigmoid() * (2.0**lvl)))
-            #     wh  = torch.mul(torch.ones_like(grid),(learnedwh1))
+                wh  = torch.mul(torch.ones_like(grid),(learnedwh1))
                 
-            #     angle = learnedtheta1
+                # angle = learnedtheta1
             #     # print(wh[4][15])
                    
-            # if H == 32:
+            if H == 32:
             #     # learnedwh2 = self.two_stage_wh2_embedding.weight[0]
                 
-            #     learnedwh2 = torch.reshape(learnedwh2,(32,32,2))
-            #     learnedwh2 = learnedwh2.unsqueeze(0)
-            #     learnedwh2 = learnedwh2.repeat(N,1,1,1)
+                learnedwh2 = torch.reshape(learnedwh2,(32,32,2))
+                learnedwh2 = learnedwh2.unsqueeze(0)
+                learnedwh2 = learnedwh2.repeat(N,1,1,1)
 
-            #     learnedtheta2 = torch.reshape(learnedtheta2,(32,32,1))
-            #     learnedtheta2 = learnedtheta2.unsqueeze(0)
-            #     learnedtheta2 = learnedtheta2.repeat(N,1,1,1)
+                # learnedtheta2 = torch.reshape(learnedtheta2,(32,32,1))
+                # learnedtheta2 = learnedtheta2.unsqueeze(0)
+                # learnedtheta2 = learnedtheta2.repeat(N,1,1,1)
                
             #     # wh  = torch.mul(torch.ones_like(grid),(learnedwh2.sigmoid() * (2.0**lvl)))
-            #     wh  = torch.mul(torch.ones_like(grid),(learnedwh2))
-            #     angle = learnedtheta2
+                wh  = torch.mul(torch.ones_like(grid),(learnedwh2))
+                # angle = learnedtheta2
             #     # print('------------------------------')
             #     # print(wh[4][15])
             #     # print('------------------------------')
-            # if H == 64:
+            if H == 64:
             #     # learnedwh3 = self.two_stage_wh3_embedding.weight[0]
                 
-            #     learnedwh3 = torch.reshape(learnedwh3,(64,64,2))
-            #     learnedwh3 = learnedwh3.unsqueeze(0)
-            #     learnedwh3 = learnedwh3.repeat(N,1,1,1)
+                learnedwh3 = torch.reshape(learnedwh3,(64,64,2))
+                learnedwh3 = learnedwh3.unsqueeze(0)
+                learnedwh3 = learnedwh3.repeat(N,1,1,1)
                
-            #     learnedtheta3 = torch.reshape(learnedtheta3,(64,64,1))
-            #     learnedtheta3 = learnedtheta3.unsqueeze(0)
-            #     learnedtheta3 = learnedtheta3.repeat(N,1,1,1)
+                # learnedtheta3 = torch.reshape(learnedtheta3,(64,64,1))
+                # learnedtheta3 = learnedtheta3.unsqueeze(0)
+                # learnedtheta3 = learnedtheta3.repeat(N,1,1,1)
                
             #     # wh  = torch.mul(torch.ones_like(grid),(learnedwh3.sigmoid() * (2.0**lvl)))
-            #     wh  = torch.mul(torch.ones_like(grid),(learnedwh3))
-            #     angle = learnedtheta3
+                wh  = torch.mul(torch.ones_like(grid),(learnedwh3))
+                # angle = learnedtheta3
 
-            # if H == 128:
+            if H == 128:
             #     # learnedwh4 = self.two_stage_wh4_embedding.weight[0]
                 
-            #     learnedwh4 = torch.reshape(learnedwh4,(128,128,2))
+                learnedwh4 = torch.reshape(learnedwh4,(128,128,2))
                 
-            #     learnedwh4 = learnedwh4.unsqueeze(0)
-            #     learnedwh4 = learnedwh4.repeat(N,1,1,1)
+                learnedwh4 = learnedwh4.unsqueeze(0)
+                learnedwh4 = learnedwh4.repeat(N,1,1,1)
                 
-            #     learnedtheta4 = torch.reshape(learnedtheta4,(128,128,1))
-            #     learnedtheta4 = learnedtheta4.unsqueeze(0)
-            #     learnedtheta4 = learnedtheta4.repeat(N,1,1,1)
+                # learnedtheta4 = torch.reshape(learnedtheta4,(128,128,1))
+                # learnedtheta4 = learnedtheta4.unsqueeze(0)
+                # learnedtheta4 = learnedtheta4.repeat(N,1,1,1)
                 
             #     # wh  = torch.mul(torch.ones_like(grid),(learnedwh4.sigmoid() * (2.0**lvl)))
-            #     wh  = torch.mul(torch.ones_like(grid),(learnedwh4))
+                wh  = torch.mul(torch.ones_like(grid),(learnedwh4))
                 
-            #     angle = learnedtheta4
+                # angle = learnedtheta4
                 
             # if H != 16:
             #     wh = torch.ones_like(grid) * learnedwh.sigmoid() * (2.0**lvl)
 
-            wh = torch.ones_like(grid) * 0.05 * (2.0**lvl)
+            # wh = torch.ones_like(grid) * 0.05 * (2.0**lvl)
             angle = torch.zeros_like(mask_flatten_)
             proposal = torch.cat((grid, wh, angle), -1).view(N, -1, 5)
             # proposal = torch.cat((grid, wh), -1).view(N, -1, 4)
@@ -297,8 +302,9 @@ class RotatedDeformableDetrTransformer(Transformer):
         #                            (output_proposals[...,4:5] < np.pi/2)).all(
         #     -1, keepdim=True)
         # 反sigmoid函数 inversigmoid
-        # output_proposals[..., :4] = torch.log(output_proposals[..., :4].clone() / (1 - output_proposals[..., :4].clone()))
-        output_proposals[..., :4] = torch.log(output_proposals[..., :4] / (1 - output_proposals[..., :4]))
+        output_proposals[..., :4] = torch.log(output_proposals[..., :4].clone() / (1 - output_proposals[..., :4].clone()))
+        
+        # output_proposals[..., :4] = torch.log(output_proposals[..., :4] / (1 - output_proposals[..., :4]))
         # output_proposals = output_proposals.masked_fill(
         #     memory_padding_mask.unsqueeze(-1), float('inf'))
         # output_proposals = output_proposals.masked_fill(
@@ -480,6 +486,7 @@ class RotatedDeformableDetrTransformer(Transformer):
         """
         assert self.as_two_stage or query_embed is not None
 
+        
         feat_flatten = []
         mask_flatten = []
         lvl_pos_embed_flatten = []
@@ -490,6 +497,7 @@ class RotatedDeformableDetrTransformer(Transformer):
             # pos_embed.shape = [2, 256, 128, 128]
             spatial_shape = (h, w)
             spatial_shapes.append(spatial_shape)
+            
             # [bs, w*h, c]
             feat = feat.flatten(2).transpose(1, 2)
             # [bs, w*h]
@@ -549,7 +557,7 @@ class RotatedDeformableDetrTransformer(Transformer):
                 self.gen_encoder_output_proposals(
                     memory, mask_flatten, spatial_shapes, learnedwh1, learnedwh2,
                     learnedwh3,learnedwh4,learnedtheta1,learnedtheta2,learnedtheta3,learnedtheta4)
-
+            
             # cls score,reg output feature map 별로 짜르기
             enc_outputs_class = cls_branches[self.decoder.num_layers](
                 output_memory)
@@ -557,17 +565,163 @@ class RotatedDeformableDetrTransformer(Transformer):
             enc_outputs_coord_unact_angle= \
                 reg_branches[
                     self.decoder.num_layers](output_memory) + output_proposals
-
+            
             if first_stage:
                 return enc_outputs_coord_unact_angle
+            #############################
+            # if first_stage:
+            #     # enc_ouputs_class_f0 = enc_outputs_class[..., 0]
 
-            topk = self.two_stage_num_proposals
+            #     enc_ouputs_class_f0 = enc_outputs_class.clone().detach()
+            #     enc_ouputs_class_f0[:,16384:-1,:] = -99
+                    
+            #     enc_ouputs_class_f1 = enc_outputs_class.clone().detach()
+            #     enc_ouputs_class_f1[:,0:16384,:] = -99
+            #     enc_ouputs_class_f1[:,20480:-1,:] = -99
+                
+            #     enc_ouputs_class_f2 = enc_outputs_class.clone().detach()
+            #     enc_ouputs_class_f2[:,0:20480,:] = -99
+            #     enc_ouputs_class_f2[:,21504:-1,:] = -99
+
+                
+            #     enc_ouputs_class_f3 = enc_outputs_class.clone().detach()
+            #     enc_ouputs_class_f3[:,0:21504,:] = -99
+                    
+            #     topk_proposals0 =  torch.topk(
+            #         enc_ouputs_class_f0.max(dim=2)[0], 180, dim=1)[1]
+                
+            #     topk_coords_unact0 = torch.gather(
+            #         enc_outputs_coord_unact_angle, 1,
+            #         topk_proposals0.unsqueeze(-1).repeat(1, 1, 5))
+            #     topk_coords_unact0 = topk_coords_unact0.detach()
+                
+            #     topk_proposals1 =  torch.topk(
+            #         enc_ouputs_class_f1.max(dim=2)[0], 70, dim=1)[1]
+            #     topk_coords_unact1 = torch.gather(
+            #         enc_outputs_coord_unact_angle, 1,
+            #         topk_proposals1.unsqueeze(-1).repeat(1, 1, 5))
+            #     topk_coords_unact1 = topk_coords_unact1.detach()
+
+            #     topk_proposals2 =  torch.topk(
+            #         enc_ouputs_class_f2.max(dim=2)[0], 25, dim=1)[1]
+            #     topk_coords_unact2 = torch.gather(
+            #         enc_outputs_coord_unact_angle, 1,
+            #         topk_proposals2.unsqueeze(-1).repeat(1, 1, 5))
+            #     topk_coords_unact2 = topk_coords_unact2.detach()
+
+
+            #     topk_proposals3 =  torch.topk(
+            #         enc_ouputs_class_f3.max(dim=2)[0], 25, dim=1)[1] 
+            #     topk_coords_unact3 = torch.gather(
+            #         enc_outputs_coord_unact_angle, 1,
+            #         topk_proposals3.unsqueeze(-1).repeat(1, 1, 5))
+            #     topk_coords_unact3 = topk_coords_unact3.detach()
+            #     topk_enc_outputs_coord_unact_angle = torch.cat([topk_coords_unact0, topk_coords_unact1, topk_coords_unact2, topk_coords_unact3],dim=1)
+                
+            #     return topk_enc_outputs_coord_unact_angle
+            
+            ############################
+            topk_1 = self.two_stage_num_proposals * 4
+            topk_2 = self.two_stage_num_proposals
+            bs, fm_num, cls_num =enc_outputs_class.shape
+
+            enc_ouputs_class_topk1 = enc_outputs_class.clone().detach()
+            enc_outputs_class_sigmoid_topk1 = enc_ouputs_class_topk1.sigmoid()
+
+            # print(enc_ouputs_class_topk1[0][0])
+            # print(enc_outputs_class_sigmoid_topk1[0][0])
+            # exit()
+
+             # 4x900
+            topk_test=  torch.topk(enc_ouputs_class_topk1.max(dim=2)[0],topk_1,dim=1)[1]
+            
+
+             # 1차 proposal box 필터링 900개 중 iou(proposal, bbox)를 고려하여 confidence score 높은거 top 300 선정
+
+            # 4x21760x15
+            enc_outputs_class_softmax =  F.softmax(enc_ouputs_class_topk1, dim=2)
+            
+            # 4x21760
+            
+            enc_outputs_coord_unact_angle_sig = enc_outputs_coord_unact_angle.clone().detach()
+            output_proposals_sig = output_proposals.clone().detach()
+
+            enc_outputs_coord_unact_angle_sim = enc_outputs_coord_unact_angle.clone().detach()
+            output_proposals_sim = output_proposals.clone().detach()
+            
+            enc_outputs_coord_unact_angle_sig[...,:4] = enc_outputs_coord_unact_angle_sig[...,:4].sigmoid()
+            output_proposals_sig[...,:4] = output_proposals_sig[...,:4].sigmoid()
+            ## test_a = topk_test[0][0]
+            # # print(enc_outputs_coord_unact_angle_sig[0][test_a])
+            # # print(output_proposals_sig[0][test_a])
+            # # print(topk_test[0])
+            
+            ## 4x21760
+            ious = diff_iou_rotated_2d(enc_outputs_coord_unact_angle_sig, output_proposals_sig)
+            # # print(ious[0][test_a])
+            # # iouss = diff_iou_rotated_2d(enc_outputs_coord_unact_angle.sigmoid(), output_proposals.sigmoid())
+            
+            ## 4x900
+            top_ious = torch.gather(
+                ious, 1,
+                topk_test.repeat(1, 1))
+
+            ## 4x21760x256
+            enc_outputs_coord_unact_angle_vec = self.enc_output_reg_norm(self.enc_output_reg(enc_outputs_coord_unact_angle_sim))
+            output_proposals_vec = self.enc_output_pro_norm(self.enc_output_pro(output_proposals_sim))
+
+            ## 4x21760
+            cos_sim = torch.nn.CosineSimilarity(dim=2)
+            # cos_sim_out = cos_sim(enc_outputs_coord_unact_angle_vec, output_proposals_vec)
+            cos_sim_out = cos_sim(output_memory, enc_outputs_coord_unact_angle_vec)
+            # nom_cos_sim = (cos_sim_out + 1) / 2
+            torch.pi = torch.acos(torch.zeros(1)).item() * 2
+            nom_cos_sim = torch.arccos(cos_sim_out) / torch.pi
+
+            # 4x900
+            top_sim = torch.gather(
+                nom_cos_sim, 1,
+                topk_test.repeat(1, 1))
+
+            # bb = enc_outputs_class_sigmoid_topk1.max(dim=2)[0]
+            # test_a = topk_test[0][0]
+            # print(bb[0][test_a])
+            # print(nom_cos_sim[0][test_a])
+            
+            #### topk_test unsqeeze?,  topk_confidence.max(dim=2) shape check           
+           
+            
+            # 4x900x15
+            # topk_confidence = torch.gather(
+            #     enc_outputs_class_softmax, 1,
+            #     topk_test.unsqueeze(-1).repeat(1, 1,15))
+            # topk_confidence = topk_confidence.detach()
+
+            topk_confidence = torch.gather(
+                enc_outputs_class_sigmoid_topk1, 1,
+                topk_test.unsqueeze(-1).repeat(1, 1,15))
+            topk_confidence = topk_confidence.detach()
+         
+            # # 4x300  iou
+            # topk_confidence_ind =  torch.topk(
+            #     topk_confidence.max(dim=2)[0]*top_ious, topk_2, dim=1)[1]
+
+             # 4x300  cos_sim
+            topk_confidence_ind =  torch.topk(
+                (topk_confidence.max(dim=2)[0]+(top_sim*0.5)+(top_ious*0.3)), topk_2, dim=1)[1]
+
+            # 4x300
+            topk_proposals = torch.gather(topk_test,1,topk_confidence_ind.repeat(1, 1))
+
+            ###########################aa
+
+            # topk = self.two_stage_num_proposals
 
             # topk 어떤 클래스 비중 높은지 파악
             # cls score top 900을 먼저 뽑고 어던 방법 사용해서 300개로 다시 필터링?
 
-            topk_proposals = torch.topk(
-                enc_outputs_class[..., 0], topk, dim=1)[1]
+            # topk_proposals = torch.topk(
+            #     enc_outputs_class[..., 0], topk, dim=1)[1]
 
             # enc_outputs_class split, topk_proposals
 
@@ -577,39 +731,6 @@ class RotatedDeformableDetrTransformer(Transformer):
             #     enc_outputs_class.max(dim=2)[0], topk, dim=1)[1]
             
             ##################
-            # enc_ouputs_class_f0 = enc_outputs_class[..., 0]
-
-            
-
-            # enc_ouputs_class_f0 = enc_outputs_class.clone().detach()
-            # enc_ouputs_class_f0[:,16384:-1,:] = -99
-                
-            # enc_ouputs_class_f1 = enc_outputs_class.clone().detach()
-            # enc_ouputs_class_f1[:,0:16384,:] = -99
-            # enc_ouputs_class_f1[:,20480:-1,:] = -99
-            
-            # enc_ouputs_class_f2 = enc_outputs_class.clone().detach()
-            # enc_ouputs_class_f2[:,0:20480,:] = -99
-            # enc_ouputs_class_f2[:,21504:-1,:] = -99
-
-            
-            # enc_ouputs_class_f3 = enc_outputs_class.clone().detach()
-            # enc_ouputs_class_f3[:,0:21504,:] = -99
-                
-            # topk_proposals0 =  torch.topk(
-            #     enc_ouputs_class_f0.max(dim=2)[0], 150, dim=1)[1]
-            
-            # topk_proposals1 =  torch.topk(
-            #     enc_ouputs_class_f1.max(dim=2)[0], 100, dim=1)[1]
-
-            # topk_proposals2 =  torch.topk(
-            #     enc_ouputs_class_f2.max(dim=2)[0], 25, dim=1)[1]
-
-            # topk_proposals3 =  torch.topk(
-            #     enc_ouputs_class_f3.max(dim=2)[0], 25, dim=1)[1] 
-
-            # topk_proposals = torch.cat([topk_proposals0,topk_proposals1,topk_proposals2,topk_proposals3],dim=1)
-
             ####################################
 
 
@@ -822,8 +943,8 @@ class RotatedDeformableDetrTransformer(Transformer):
         # quantized = quantized.permute(1, 0, 2)
         # query = torch.add(query,quantized)
         
-        if first_stage:
-            return enc_outputs_coord_unact_angle
+        # if first_stage:
+        #     return enc_outputs_coord_unact_angle
 
 
         query = query.permute(1, 0, 2)
@@ -842,7 +963,7 @@ class RotatedDeformableDetrTransformer(Transformer):
             reg_branches=reg_branches,
             bbox_coder=bbox_coder,
             **kwargs)
-
+        
         inter_references_out = inter_references
         if self.as_two_stage:
             return inter_states, init_reference_out, \

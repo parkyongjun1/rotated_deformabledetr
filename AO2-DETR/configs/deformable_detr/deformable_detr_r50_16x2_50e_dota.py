@@ -36,10 +36,10 @@ model = dict(
         in_channels=2048,
         sync_cls_avg_factor=True,
         as_two_stage=False,
-        frm_cfgs=[
-            dict(in_channels=256, featmap_strides=[16, 32, 64, 128]),
-            dict(in_channels=256, featmap_strides=[16, 32, 64, 128])
-        ],
+        # frm_cfgs=[
+        #     dict(in_channels=256, featmap_strides=[128, 64, 32, 16]),
+        #     dict(in_channels=256, featmap_strides=[128, 64, 32, 16])
+        # ],
         transformer=dict(
             type='RotatedDeformableDetrTransformer',
             # use_dab=True,
@@ -72,7 +72,8 @@ model = dict(
                             dropout=0.1),
                         dict(
                             type='MultiScaleDeformableAttention',
-                            embed_dims=256)
+                            embed_dims=256,
+                            num_points=5)
                     ],
                     feedforward_channels=1024,
                     ffn_dropout=0.1,
@@ -101,6 +102,7 @@ model = dict(
         reg_decoded_bbox=True,
         # loss_iou=dict(type='GDLoss', loss_type='gwd', loss_weight=5.0)
         loss_iou=dict(type='RotatedIoULoss', loss_weight=8.0),
+        # loss_iou=dict(type='KFLoss', weight=8.0),
     ),
     # training and testing settings
     train_cfg=dict(
@@ -108,6 +110,7 @@ model = dict(
             type='Rotated_HungarianAssigner',
             cls_cost=dict(type='FocalLossCost', weight=2.0),
             reg_cost=dict(type='RBBoxL1Cost', weight=2.0, box_format='xywha'),
+            # iou_cost=dict(type='KFLossCost', weight=8.0)
             iou_cost=dict(type='RotatedIoUCost', iou_mode='iou', weight=8.0)
             # iou_cost=dict(type='GaussianIoUCost', iou_mode='iou', weight=5.0)
         )),
@@ -150,9 +153,11 @@ evaluation = dict(interval=1, metric='mAP')
 # learning policy
 lr_config = dict(policy='step', step=[40])
 runner = dict(type='EpochBasedRunner', max_epochs=50)
-checkpoint_config = dict(interval=12)
+checkpoint_config = dict(interval=2)
 find_unused_parameters = True
 # work_dir = '/data/2_data_server/cv-01/ao2_a6000/work_dirs/imp_clsmaxbbox_trainval_300_detFalse/'
 # work_dir = '/data/2_data_server/cv-01/ao2_a6000/work_dirs/imp_deformabledetr_clsmax_bboxtest_300_detFalse/'
 # work_dir = '/data/2_data_server/cv-01/ao2_a6000/work_dirs/imp_frm_base_modify_train_300_detFalse/'
-work_dir = '/data/2_data_server/cv-01/ao2_a6000/work_dirs/frm_test/'
+# work_dir = '/data/2_data_server/cv-01/ao2_a6000/work_dirs/2frmtopbox_p5_baseline/'
+work_dir = '/data/2_data_server/cv-01/ao2_a6000/work_dirs/proposal_4_300_cossim_iou_twice_test/'
+# work_dir = '/data/2_data_server/cv-01/ao2_a6000/work_dirs/imp_4_300_baseline/'

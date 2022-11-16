@@ -201,6 +201,7 @@ class FeatureRefineModule(nn.Module):
         out = []
         for x_scale, best_rbboxes_scale, fr_scale in zip(
                 x, mlvl_rbboxes, self.featmap_strides):
+            
             feat_scale_1 = self.conv_5_1(self.conv_1_5(x_scale))
             feat_scale_2 = self.conv_7_1(self.conv_1_7(x_scale))
             feat_scale_3 = self.conv_1_1(x_scale)
@@ -208,7 +209,8 @@ class FeatureRefineModule(nn.Module):
             feat_scale = self.relu(x_scale + self.conv_res(feat_scale_cat))
             feat_refined_scale = rotated_feature_align(feat_scale,
                                                        best_rbboxes_scale,
-                                                       1 / fr_scale)
+                                                       1 / fr_scale,
+                                                       5)
             out.append(feat_scale + feat_refined_scale)
 
             # feat_scale = feat_scale_1 + feat_scale_2
