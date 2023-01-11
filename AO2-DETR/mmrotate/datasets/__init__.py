@@ -6,6 +6,6 @@ from .sar import SARDataset  # noqa: F401, F403
 from .hrsc import HRSCDataset
 from .dota15 import DOTA15Dataset
 from .sku import SKUDataset
-
+from .arirang import ARIRANGDataset
 __all__ = ['SARDataset', 'DOTADataset', 'build_dataset', 'HRSCDataset',
-           'DOTA15Dataset', 'SKUDataset']
+           'DOTA15Dataset', 'SKUDataset', 'ARIRANGDataset']

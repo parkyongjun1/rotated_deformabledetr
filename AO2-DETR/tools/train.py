@@ -47,6 +47,7 @@ def parse_args():
         help='ids of gpus to use '
         '(only applicable to non-distributed training)')
     parser.add_argument('--seed', type=int, default=0, help='random seed')
+    # parser.add_argument('--seed', type=int, help='random seed')
     parser.add_argument(
         '--deterministic',
         # default=True,

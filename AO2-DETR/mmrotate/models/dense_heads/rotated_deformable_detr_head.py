@@ -54,7 +54,7 @@ class RotatedDeformableDETRHead(RotatedDETRHead):
         self.random_refpoints_xy = random_refpoints_xy
         if self.as_two_stage:
             transformer['as_two_stage'] = self.as_two_stage
-        self.num_refine_stages = 2
+        self.num_refine_stages = 1
 
         super(RotatedDeformableDETRHead, self).__init__(
             *args, transformer=transformer, **kwargs)
@@ -89,6 +89,10 @@ class RotatedDeformableDETRHead(RotatedDETRHead):
             self.reg_branches = nn.ModuleList(
                 [reg_branch for _ in range(num_pred)])
 
+        if self.as_two_stage:
+            # self.query_embedding = None
+            self.query_embedding = nn.Embedding(self.num_query, self.embed_dims)
+
         if not self.as_two_stage:
             if not self.use_dab:
                 self.query_embedding = nn.Embedding(self.num_query,
@@ -109,9 +113,9 @@ class RotatedDeformableDETRHead(RotatedDETRHead):
     def init_weights(self):
         """Initialize weights of the DeformDETR head."""
         self.transformer.init_weights()
-        if self.frm_cfgs is not None:
+        if self.frm_cfgs1 is not None:
             for i in range(self.num_refine_stages):
-                self.feat_refine_module[i].init_weights()
+                self.feat_refine_module1[i].init_weights()
                 
         if self.loss_cls.use_sigmoid:
             bias_init = bias_init_with_prob(0.01)
@@ -175,7 +179,9 @@ class RotatedDeformableDETRHead(RotatedDETRHead):
                 self.positional_encoding(mlvl_masks[-1]))
         
         if self.as_two_stage:
-            query_embeds = None
+            # query_embeds = None
+            query_embeds = self.query_embedding.weight[0:self.num_query,:]
+
         elif self.use_dab:
             if self.num_patterns == 0:
                 tgt_embed = self.tgt_embed.weight           # nq, 256
@@ -209,19 +215,40 @@ class RotatedDeformableDETRHead(RotatedDETRHead):
             
             refine_boxes_batch = []
             
+            # for j in range(rois.shape[0]):
+            #     pre_index = 0
+            #     refine_boxes = []
+            #     for i in spatial_shapes:
+            #         end_index = pre_index + i[0]*i[1]
+            #         tmp = rois[j][pre_index:end_index, :]
+            #         tmp[...,:4] = tmp[...,:4]*i[0]
+            #         pre_index = end_index
+            #         refine_boxes.append(tmp)
+                
+            #     refine_boxes_batch.append(refine_boxes)
+
             for j in range(rois.shape[0]):
                 pre_index = 0
                 refine_boxes = []
                 for i in spatial_shapes:
                     end_index = pre_index + i[0]*i[1]
                     tmp = rois[j][pre_index:end_index, :]
-                    tmp[...,:4] = tmp[...,:4]*i[0]
+                    tmp_valid = (tmp[..., :4] > 9999).all(-1, keepdim=True)
+                    tmp[...,:4] = tmp[...,:4].masked_fill(tmp_valid, -1000)
+                    tmp[...,:4] = (tmp[...,:4].sigmoid())*i[0]
+                    # tmp[...,4:5] = tmp[...,4:5].sigmoid()
                     pre_index = end_index
                     refine_boxes.append(tmp)
                 
                 refine_boxes_batch.append(refine_boxes)
 
-            ## best bbox filtering
+
+            for i in range(self.num_refine_stages):
+                # x_refine = self.feat_refine_module1[i](mlvl_feats, refine_boxes_batch)
+                x_refine = self.feat_refine_module[i](mlvl_feats, refine_boxes_batch)
+               
+            
+              ## best bbox filtering
             
             # for j in range(rois.shape[0]):
             #     pre_index = 0
@@ -234,11 +261,7 @@ class RotatedDeformableDETRHead(RotatedDETRHead):
                 
             #     refine_boxes_batch.append(refine_boxes)
                 
-
-            for i in range(self.num_refine_stages):
-                x_refine = self.feat_refine_module[i](mlvl_feats, refine_boxes_batch)
-               
-            
+        
             hs, init_reference, inter_references, \
             enc_outputs_class, enc_outputs_coord = self.transformer(
                 x_refine,

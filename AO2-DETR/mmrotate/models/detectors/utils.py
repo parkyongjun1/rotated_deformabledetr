@@ -27,6 +27,7 @@ class AlignConv(nn.Module):
             padding=(kernel_size - 1) // 2,
             deform_groups=deform_groups)
         self.relu = nn.ReLU(inplace=True)
+        self.init_weights()
 
     def init_weights(self):
         """Initialize weights of the head."""
@@ -82,7 +83,9 @@ class AlignConv(nn.Module):
             for i in range(num_imgs)
         ]
         offset_tensor = torch.stack(offset_list, dim=0)
-        x = self.relu(self.deform_conv(x, offset_tensor.detach()))
+        x_deconv = self.deform_conv(x, offset_tensor.detach())
+        x = self.relu(x + x_deconv)
+        # x = self.relu(self.deform_conv(x, offset_tensor.detach()))
         return x
 
 

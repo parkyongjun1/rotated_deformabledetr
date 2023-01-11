@@ -17,6 +17,7 @@ import numpy as np
 from mmrotate.core import build_bbox_coder
 from mmdet.models.dense_heads.base_dense_head import BaseDenseHead
 from ..detectors.utils import FeatureRefineModule
+from ..detectors.utils import AlignConvModule
 
 
 @ROTATED_HEADS.register_module()
@@ -62,6 +63,7 @@ class RotatedDETRHead(BaseDenseHead):
                  transformer=None,
                  sync_cls_avg_factor=False,
                  frm_cfgs=None,
+                 frm_cfgs1=None,
                  positional_encoding=dict(
                      type='SinePositionalEncoding',
                      num_feats=128,
@@ -92,6 +94,7 @@ class RotatedDETRHead(BaseDenseHead):
         self.bg_cls_weight = 0
         self.sync_cls_avg_factor = sync_cls_avg_factor
         self.frm_cfgs = frm_cfgs
+        self.frm_cfgs1 = frm_cfgs1
         class_weight = loss_cls.get('class_weight', None)
         if class_weight is not None and (self.__class__ is RotatedDETRHead):
             assert isinstance(class_weight, float), 'Expected ' \
@@ -159,7 +162,14 @@ class RotatedDETRHead(BaseDenseHead):
         if self.frm_cfgs is not None:
             self.feat_refine_module = nn.ModuleList()
             for i, frm_cfg in enumerate(self.frm_cfgs):
-                self.feat_refine_module.append(FeatureRefineModule(**frm_cfg))
+                # self.feat_refine_module.append(FeatureRefineModule(**frm_cfg))
+                self.feat_refine_module.append(AlignConvModule(**frm_cfg))
+        
+        if self.frm_cfgs1 is not None:
+            self.feat_refine_module1 = nn.ModuleList()
+            for i, frm_cfg1 in enumerate(self.frm_cfgs1):
+                self.feat_refine_module1.append(FeatureRefineModule(**frm_cfg1))
+                
         self._init_layers()
 
     def _init_layers(self):
@@ -184,6 +194,9 @@ class RotatedDETRHead(BaseDenseHead):
         if self.frm_cfgs is not None:
             for i in range(self.num_refine_stages):
                 self.feat_refine_module[i].init_weights()
+        if self.frm_cfgs1 is not None:
+            for i in range(self.num_refine_stages):
+                self.feat_refine_module1[i].init_weights()
 
     def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict,
                               missing_keys, unexpected_keys, error_msgs):
