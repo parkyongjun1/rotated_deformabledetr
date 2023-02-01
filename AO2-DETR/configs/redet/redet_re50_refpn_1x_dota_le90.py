@@ -1,5 +1,5 @@
 _base_ = [
-    '../_base_/datasets/dotav1.py', '../_base_/schedules/schedule_1x.py',
+    '../_base_/datasets/arirang.py', '../_base_/schedules/schedule_1x.py',
     '../_base_/default_runtime.py'
 ]
 
@@ -12,8 +12,12 @@ model = dict(
         num_stages=4,
         out_indices=(0, 1, 2, 3),
         frozen_stages=1,
+        # style='pytorch',
+        # pretrained='work_dirs/pretrain/re_resnet50_c8_batch256-25b16846.pth'),
+        norm_cfg=dict(type='BN', requires_grad=True),
+        norm_eval=True,
         style='pytorch',
-        pretrained='work_dirs/pretrain/re_resnet50_c8_batch256-25b16846.pth'),
+        init_cfg=dict(type='Pretrained', checkpoint='torchvision://resnet50')),
     neck=dict(
         type='ReFPN',
         in_channels=[256, 512, 1024, 2048],
@@ -65,7 +69,7 @@ model = dict(
                 in_channels=256,
                 fc_out_channels=1024,
                 roi_feat_size=7,
-                num_classes=15,
+                num_classes=8,
                 bbox_coder=dict(
                     type='DeltaXYWHAHBBoxCoder',
                     angle_range=angle_version,
@@ -85,7 +89,7 @@ model = dict(
                 in_channels=256,
                 fc_out_channels=1024,
                 roi_feat_size=7,
-                num_classes=15,
+                num_classes=8,
                 bbox_coder=dict(
                     type='DeltaXYWHAOBBoxCoder',
                     angle_range=angle_version,
@@ -178,7 +182,7 @@ img_norm_cfg = dict(
 train_pipeline = [
     dict(type='LoadImageFromFile'),
     dict(type='LoadAnnotations', with_bbox=True),
-    dict(type='RResize', img_scale=(1024, 1024)),
+    dict(type='RResize', img_scale=(512, 512)),
     dict(
         type='RRandomFlip',
         flip_ratio=[0.25, 0.25, 0.25],
@@ -195,3 +199,5 @@ data = dict(
     test=dict(version=angle_version))
 
 optimizer = dict(lr=0.005)
+
+work_dir = '/data/2_data_server/cv-01/ao2_a6000/arirang_dir/redet/small_vehicle_test/'

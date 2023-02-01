@@ -37,8 +37,6 @@ def xy_wh_r_2_xy_sigma(xywhr):
 @weighted_loss
 def kfiou_loss(pred,
                target,
-               pred_decode=None,
-               targets_decode=None,
                fun=None,
                beta=1.0 / 9.0,
                eps=1e-6):
@@ -56,10 +54,10 @@ def kfiou_loss(pred,
     Returns:
         loss (torch.Tensor)
     """
-    xy_p = pred[:, :2]
-    xy_t = target[:, :2]
-    _, Sigma_p = xy_wh_r_2_xy_sigma(pred_decode)
-    _, Sigma_t = xy_wh_r_2_xy_sigma(targets_decode)
+    # xy_p = pred[:, :2]
+    # xy_t = target[:, :2]
+    xy_p, Sigma_p = xy_wh_r_2_xy_sigma(pred)
+    xy_t, Sigma_t = xy_wh_r_2_xy_sigma(target)
 
     # Smooth-L1 norm
     diff = torch.abs(xy_p - xy_t)
@@ -117,8 +115,6 @@ class KFLoss(nn.Module):
                 target,
                 weight=None,
                 avg_factor=None,
-                pred_decode=None,
-                targets_decode=None,
                 reduction_override=None,
                 **kwargs):
         """Forward function.
@@ -155,7 +151,5 @@ class KFLoss(nn.Module):
             fun=self.fun,
             weight=weight,
             avg_factor=avg_factor,
-            pred_decode=pred_decode,
-            targets_decode=targets_decode,
             reduction=reduction,
             **kwargs) * self.loss_weight

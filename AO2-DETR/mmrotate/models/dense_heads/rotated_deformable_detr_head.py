@@ -177,7 +177,7 @@ class RotatedDeformableDETRHead(RotatedDETRHead):
                               size=feat.shape[-2:]).to(torch.bool).squeeze(0))
             mlvl_positional_encodings.append(
                 self.positional_encoding(mlvl_masks[-1]))
-        
+     
         if self.as_two_stage:
             # query_embeds = None
             query_embeds = self.query_embedding.weight[0:self.num_query,:]
@@ -198,7 +198,7 @@ class RotatedDeformableDETRHead(RotatedDETRHead):
                 query_embeds = torch.cat((tgt_all_embed, refanchor), dim=1)
         else:
             query_embeds = self.query_embedding.weight
-        if self.frm_cfgs is not None:
+        if self.frm_cfgs1 is not None:
             # hs, init_reference, inter_references, \
             initial_enc_outputs_coord = self.transformer(
                     mlvl_feats,
@@ -245,7 +245,7 @@ class RotatedDeformableDETRHead(RotatedDETRHead):
 
             for i in range(self.num_refine_stages):
                 # x_refine = self.feat_refine_module1[i](mlvl_feats, refine_boxes_batch)
-                x_refine = self.feat_refine_module[i](mlvl_feats, refine_boxes_batch)
+                x_refine = self.feat_refine_module1[i](mlvl_feats, refine_boxes_batch)
                
             
               ## best bbox filtering

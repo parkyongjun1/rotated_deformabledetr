@@ -113,7 +113,7 @@ class RotatedDeformableDetrTransformer(Transformer):
 
         if self.as_two_stage:
             self.enc_output = nn.Linear(self.embed_dims, self.embed_dims)
-            self.enc_output_cls = nn.Linear(15, 256)
+            self.enc_output_cls = nn.Linear(8, 256)
             self.enc_output_reg = nn.Linear(5, 256)
             self.enc_output_pro = nn.Linear(5, 256)
             self.enc_output_cls_norm = nn.LayerNorm(256)
@@ -208,6 +208,7 @@ class RotatedDeformableDetrTransformer(Transformer):
         # 生成网格一样的proposals
         # spatial_shapes = 16x16, 32x32, 64x64, 128x128
         for lvl, (H, W) in enumerate(spatial_shapes):
+           
             mask_flatten_ = memory_padding_mask[:, _cur:(_cur + H * W)].view(
                 N, H, W, 1)
             valid_H = torch.sum(~mask_flatten_[:, :, 0, 0], 1)
@@ -607,6 +608,7 @@ class RotatedDeformableDetrTransformer(Transformer):
             1, 0, 2)  # (H*W, bs, embed_dims)
         # 21760 = 128*128+64*64+32*32+16*16 query的个数
         # memory是编码后的每个query和keys在多层featuremap中对应的特征 一维特征 256
+        
         memory = self.encoder(
             query=feat_flatten,
             key=None,
@@ -641,7 +643,7 @@ class RotatedDeformableDetrTransformer(Transformer):
                 self.gen_encoder_output_proposals(
                     memory, mask_flatten, spatial_shapes, input_hw)
             
-
+         
             # cls score,reg output feature map 별로 짜르기
             enc_outputs_class = cls_branches[self.decoder.num_layers](
                 output_memory)
@@ -649,6 +651,7 @@ class RotatedDeformableDetrTransformer(Transformer):
             enc_outputs_coord_unact_angle= \
                 reg_branches[
                     self.decoder.num_layers](output_memory) + output_proposals
+            # print(enc_outputs_coord_unact_angle)
             
             if first_stage:
                 return enc_outputs_coord_unact_angle
@@ -729,7 +732,7 @@ class RotatedDeformableDetrTransformer(Transformer):
             # # 4x300
             # topk_proposals = torch.gather(topk_test,1,topk_confidence_ind.repeat(1, 1))
 
-            ###### previous
+            ##### previous
             ############################
             ## topk_1을 다이나믹하게 0.5이상 다뽑기 if 0.5 넘는게 400개 안넘으면 400으로 설정
             enc_out_topk_mask = enc_outputs_class.max(dim=2)[0].clone().detach()
@@ -744,6 +747,25 @@ class RotatedDeformableDetrTransformer(Transformer):
             enc_m_topk2 = torch.count_nonzero(enc_out_topk_mask2)
             enc_m_topk3 = torch.count_nonzero(enc_out_topk_mask3)
             
+            # 1500
+            
+            # filter_1 = 2000
+            # filter_2 = 3000
+            # filter_3 = 4000
+            # filter_4 = 5000
+
+            # 1200
+            # filter_1 = 1800
+            # filter_2 = 2400
+            # filter_3 = 3000
+            # filter_4 = 4000
+
+            ## 900
+            filter_1 = 1200
+            filter_2 = 1800
+            filter_3 = 2000
+            filter_4 = 3000
+
              # 300
             # filter_1 = 400
             # filter_2 = 600
@@ -751,10 +773,10 @@ class RotatedDeformableDetrTransformer(Transformer):
             # filter_4 = 1200
 
             # 100
-            filter_1 = 150
-            filter_2 = 250
-            filter_3 = 350
-            filter_4 = 450
+            # filter_1 = 150
+            # filter_2 = 250
+            # filter_3 = 350
+            # filter_4 = 450
 
             # 200
             # filter_1 = 250
@@ -860,17 +882,17 @@ class RotatedDeformableDetrTransformer(Transformer):
             # print(nom_cos_sim[0][test_a])
             
             #### topk_test unsqeeze?,  topk_confidence.max(dim=2) shape check           
-           
             
+            ## class 개수 만큼
             # 4x900x15
             # topk_confidence = torch.gather(
             #     enc_outputs_class_softmax, 1,
-            #     topk_test.unsqueeze(-1).repeat(1, 1,15))
+            #     topk_test.unsqueeze(-1).repeat(1, 1,8))
             # topk_confidence = topk_confidence.detach()
 
             topk_confidence = torch.gather(
                 enc_outputs_class_sigmoid_topk1, 1,
-                topk_test.unsqueeze(-1).repeat(1, 1,15))
+                topk_test.unsqueeze(-1).repeat(1, 1,8))
             topk_confidence = topk_confidence.detach()
 
             # topk_memory
@@ -908,7 +930,7 @@ class RotatedDeformableDetrTransformer(Transformer):
             # 4x300
             topk_proposals = torch.gather(topk_test,1,topk_confidence_ind.repeat(1, 1))
 
-            ###########################aa
+            # ###########################aa
             ###### previous
             # topk = self.two_stage_num_proposals
 
@@ -923,24 +945,41 @@ class RotatedDeformableDetrTransformer(Transformer):
 
             
             # topk_proposals = torch.topk(
-            #     enc_outputs_class.max(dim=2)[0], topk, dim=1)[1]
+                # enc_outputs_class.max(dim=2)[0], topk, dim=1)[1]
             
             ##################
             ####################################
 
-
-            # topk_proposals_0 = torch.topk(
-            #     enc_outputs_class[..., 0], 25, dim=1)[1]
-            # topk_proposals_00 = topk_proposals_0.split(1,dim=0)
             
 
+            # topk_proposals_0 = torch.topk(
+            #     enc_outputs_class[..., 0], 20, dim=1)[1]
+            # topk_proposals_00 = topk_proposals_0.split(1,dim=0)
+            # a0 = enc_outputs_class.max(dim=2)[1]
+            # check_0 = torch.numel(a0[a0 ==0])
+            # check_1 = torch.numel(a0[a0==1])
+            # check_2 = torch.numel(a0[a0==2])
+            # check_3 = torch.numel(a0[a0==3])
+            # check_4 = torch.numel(a0[a0==4])
+            # check_5 = torch.numel(a0[a0==5])
+            # check_6 = torch.numel(a0[a0==6])
+            # check_7 = torch.numel(a0[a0==7])
+            # check_8 = torch.numel(a0[a0==8])
+            # check_9 = torch.numel(a0[a0==9])
+            # check_10 = torch.numel(a0[a0==10])
+            # check_11 = torch.numel(a0[a0==11])
+            # check_12 = torch.numel(a0[a0==12])
+            # check_13 = torch.numel(a0[a0==13])
+            # check_14 = torch.numel(a0[a0==14])
+
+            # print(check_0,check_1,check_2,check_3,check_4,check_5,check_6,check_7,check_8,check_9,check_10,check_11,check_12,check_13,check_14)
+            
             # for i in range(bs):
             #     topk_proposals_0_inx = topk_proposals_00[i].squeeze(0)
             #     enc_outputs_class[i,topk_proposals_0_inx,:] = -99
 
-
             # topk_proposals_1 = torch.topk(
-            #     enc_outputs_class[..., 1], 6, dim=1)[1]
+            #     enc_outputs_class[..., 1], 40, dim=1)[1]
             # # topk_proposalsss = torch.cat([topk_proposals_0,topk_proposals_1],dim=1)
             # topk_proposals_01 = topk_proposals_1.split(1,dim=0)
 
@@ -949,7 +988,7 @@ class RotatedDeformableDetrTransformer(Transformer):
             #     enc_outputs_class[i,topk_proposals_1_inx,:] = -99
 
             # topk_proposals_2 = torch.topk(
-            #     enc_outputs_class[..., 1], 10, dim=1)[1]
+            #     enc_outputs_class[..., 2], 20, dim=1)[1]
             # topk_proposals_02 = topk_proposals_2.split(1,dim=0)
 
             # for i in range(bs):
@@ -957,7 +996,7 @@ class RotatedDeformableDetrTransformer(Transformer):
             #     enc_outputs_class[i,topk_proposals_2_inx,:] = -99
 
             # topk_proposals_3 = torch.topk(
-            #     enc_outputs_class[..., 1], 6, dim=1)[1]
+            #     enc_outputs_class[..., 3], 20, dim=1)[1]
             # topk_proposals03 = topk_proposals_3.split(1,dim=0)
 
             # for i in range(bs):
@@ -965,7 +1004,7 @@ class RotatedDeformableDetrTransformer(Transformer):
             #     enc_outputs_class[i,topk_proposals3_inx,:] = -99
             
             # topk_proposals_4 = torch.topk(
-            #     enc_outputs_class[..., 1], 28, dim=1)[1]
+            #     enc_outputs_class[..., 4], 40, dim=1)[1]
             # topk_proposals_04 = topk_proposals_4.split(1,dim=0)
 
             # for i in range(bs):
@@ -973,7 +1012,7 @@ class RotatedDeformableDetrTransformer(Transformer):
             #     enc_outputs_class[i,topk_proposals_4_inx,:] = -99
 
             # topk_proposals_5 = torch.topk(
-            #     enc_outputs_class[..., 1], 28, dim=1)[1]
+            #     enc_outputs_class[..., 5], 40, dim=1)[1]
             # topk_proposals_05 = topk_proposals_5.split(1,dim=0)
 
             # for i in range(bs):
@@ -981,7 +1020,7 @@ class RotatedDeformableDetrTransformer(Transformer):
             #     enc_outputs_class[i,topk_proposals_5_inx,:] = -99
             
             # topk_proposals_6 = torch.topk(
-            #     enc_outputs_class[..., 1], 50, dim=1)[1]
+            #     enc_outputs_class[..., 6], 40, dim=1)[1]
             # topk_proposals_06 = topk_proposals_6.split(1,dim=0)
 
             # for i in range(bs):
@@ -989,7 +1028,7 @@ class RotatedDeformableDetrTransformer(Transformer):
             #     enc_outputs_class[i,topk_proposals_6_inx,:] = -99
             
             # topk_proposals_7 = torch.topk(
-            #     enc_outputs_class[..., 1], 6, dim=1)[1]
+            #     enc_outputs_class[..., 7], 40, dim=1)[1]
             # topk_proposals_07 = topk_proposals_7.split(1,dim=0)
 
             # for i in range(bs):
@@ -997,7 +1036,7 @@ class RotatedDeformableDetrTransformer(Transformer):
             #     enc_outputs_class[i,topk_proposals_7_inx,:] = -99
 
             # topk_proposals_8 = torch.topk(
-            #     enc_outputs_class[..., 1], 6, dim=1)[1]
+            #     enc_outputs_class[..., 8], 40, dim=1)[1]
             # topk_proposals_08 = topk_proposals_8.split(1,dim=0)
 
             # for i in range(bs):
@@ -1005,7 +1044,7 @@ class RotatedDeformableDetrTransformer(Transformer):
             #     enc_outputs_class[i,topk_proposals_8_inx,:] = -99
 
             # topk_proposals_9 = torch.topk(
-            #     enc_outputs_class[..., 1], 28, dim=1)[1]
+            #     enc_outputs_class[..., 9], 40, dim=1)[1]
             # topk_proposals_09 = topk_proposals_9.split(1,dim=0)
 
             # for i in range(bs):
@@ -1013,7 +1052,7 @@ class RotatedDeformableDetrTransformer(Transformer):
             #     enc_outputs_class[i,topk_proposals_9_inx,:] = -99
 
             # topk_proposals_10 = torch.topk(
-            #     enc_outputs_class[..., 1], 10, dim=1)[1]
+            #     enc_outputs_class[..., 10], 20, dim=1)[1]
             # topk_proposals_010 = topk_proposals_10.split(1,dim=0)
 
             # for i in range(bs):
@@ -1021,7 +1060,7 @@ class RotatedDeformableDetrTransformer(Transformer):
             #     enc_outputs_class[i,topk_proposals_10_inx,:] = -99
 
             # topk_proposals_11 = torch.topk(
-            #     enc_outputs_class[..., 1], 6, dim=1)[1]
+            #     enc_outputs_class[..., 11], 40, dim=1)[1]
             # topk_proposals_011 = topk_proposals_11.split(1,dim=0)
 
             # for i in range(bs):
@@ -1029,7 +1068,7 @@ class RotatedDeformableDetrTransformer(Transformer):
             #     enc_outputs_class[i,topk_proposals_11_inx,:] = -99
 
             # topk_proposals_12 = torch.topk(
-            #     enc_outputs_class[..., 1], 28, dim=1)[1]
+            #     enc_outputs_class[..., 12], 40, dim=1)[1]
             # topk_proposals_012 = topk_proposals_12.split(1,dim=0)
 
             # for i in range(bs):
@@ -1037,7 +1076,7 @@ class RotatedDeformableDetrTransformer(Transformer):
             #     enc_outputs_class[i,topk_proposals_12_inx,:] = -99
 
             # topk_proposals_13 = torch.topk(
-            #     enc_outputs_class[..., 1], 6, dim=1)[1]
+            #     enc_outputs_class[..., 13], 6, dim=1)[1]
             # topk_proposals_013 = topk_proposals_13.split(1,dim=0)
 
             # for i in range(bs):
@@ -1045,7 +1084,7 @@ class RotatedDeformableDetrTransformer(Transformer):
             #     enc_outputs_class[i,topk_proposals_13_inx,:] = -99
 
             # topk_proposals_14 = torch.topk(
-            #     enc_outputs_class[..., 1], 7, dim=1)[1]
+            #     enc_outputs_class[..., 14], 7, dim=1)[1]
             # topk_proposals_014 = topk_proposals_14.split(1,dim=0)
 
             # for i in range(bs):
@@ -1055,7 +1094,6 @@ class RotatedDeformableDetrTransformer(Transformer):
             # topk_proposals = torch.cat([topk_proposals_0,topk_proposals_1,topk_proposals_2, topk_proposals_3,topk_proposals_4,topk_proposals_5,topk_proposals_6,topk_proposals_7,topk_proposals_8,
             #                             topk_proposals_9,topk_proposals_10,topk_proposals_11,topk_proposals_12,topk_proposals_13,topk_proposals_14], dim=1)
 
-
             topk_coords_unact = torch.gather(
                 enc_outputs_coord_unact_angle, 1,
                 topk_proposals.unsqueeze(-1).repeat(1, 1, 5))
@@ -1063,7 +1101,7 @@ class RotatedDeformableDetrTransformer(Transformer):
            
             topk_cls_score = torch.gather(
             enc_outputs_class, 1, 
-            topk_proposals.unsqueeze(-1).repeat(1, 1, 15))
+            topk_proposals.unsqueeze(-1).repeat(1, 1, 8))
             topk_cls_score = topk_cls_score.detach()
 
             # topk_cls_score = topk_cls_score.max(dim=2)[0]
@@ -1138,9 +1176,9 @@ class RotatedDeformableDetrTransformer(Transformer):
             # # ######################################
 
             ## 단순 query + cls embedding
-            enc_ouputs_class_embedding = topk_cls_score
-            enc_ouputs_class_embedding = self.enc_output_cls_norm(self.enc_output_cls(enc_ouputs_class_embedding))
-            query = query + enc_ouputs_class_embedding
+            # enc_ouputs_class_embedding = topk_cls_score
+            # enc_ouputs_class_embedding = self.enc_output_cls_norm(self.enc_output_cls(enc_ouputs_class_embedding))
+            # query = query + enc_ouputs_class_embedding
 
             ## cluster
             # topk_class = self.tgt_embed.weight[:, None, :].repeat(1, bs, 1)

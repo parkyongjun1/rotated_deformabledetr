@@ -1,5 +1,5 @@
 _base_ = [
-    '../_base_/datasets/dotav1.py', '../_base_/schedules/schedule_1x.py',
+    '../_base_/datasets/arirang.py', '../_base_/schedules/schedule_1x.py',
     '../_base_/default_runtime.py'
 ]
 
@@ -66,7 +66,7 @@ model = dict(
                 in_channels=256,
                 fc_out_channels=1024,
                 roi_feat_size=7,
-                num_classes=15,
+                num_classes=8,
                 bbox_coder=dict(
                     type='DeltaXYWHAHBBoxCoder',
                     angle_range=angle_version,
@@ -86,7 +86,7 @@ model = dict(
                 in_channels=256,
                 fc_out_channels=1024,
                 roi_feat_size=7,
-                num_classes=15,
+                num_classes=8,
                 bbox_coder=dict(
                     type='DeltaXYWHAOBBoxCoder',
                     angle_range=angle_version,
@@ -180,7 +180,7 @@ img_norm_cfg = dict(
 train_pipeline = [
     dict(type='LoadImageFromFile'),
     dict(type='LoadAnnotations', with_bbox=True),
-    dict(type='RResize', img_scale=(1024, 1024)),
+    dict(type='RResize', img_scale=(512, 512)),
     dict(
         type='RRandomFlip',
         flip_ratio=[0.25, 0.25, 0.25],
@@ -197,3 +197,6 @@ data = dict(
     test=dict(version=angle_version))
 
 optimizer = dict(lr=0.005)
+
+
+work_dir = '/data/2_data_server/cv-01/ao2_a6000/arirang_dir/roi_trans/smallvehicle_test/'

@@ -13,3 +13,4 @@ model = dict(
             allowed_border=-1,
             pos_weight=-1,
             debug=False)))
+work_dir = '/data/2_data_server/cv-01/ao2_a6000/arirang_dir/sasm_small_vehicle/'

@@ -210,7 +210,7 @@ class GaussianIoUCost:
         target = self.preprocess(gt_bboxes)
         xy_p, Sigma_p = pred
         xy_t, Sigma_t = target
-
+     
         xy_distance = (xy_p[..., None, :2] - xy_t).square().sum(dim=-1)
 
         whr_distance = Sigma_p.diagonal(dim1=-2, dim2=-1).sum(dim=-1)
@@ -230,3 +230,92 @@ class GaussianIoUCost:
             distance = distance / scale
 
         return postprocess(distance, fun=fun, tau=tau) * self.weight
+
+@ROTATED_MATCH_COST.register_module()
+class KFIoUCost:
+    BAG_PREP = {
+        'xy_stddev_pearson': xy_stddev_pearson_2_xy_sigma,
+        'xy_wh_r': xy_wh_r_2_xy_sigma
+    }
+    def __init__(self, iou_mode='giou', weight=1.):
+        self.weight = weight
+        self.iou_mode = iou_mode
+        self.preprocess = self.BAG_PREP['xy_wh_r']
+
+    def __call__(self, bboxes, gt_bboxes,  fun=None, beta=1.0 / 9.0, eps=1e-6):
+        """Kalman filter IoU loss.
+
+        Args:
+            pred (torch.Tensor): Predicted bboxes.
+            target (torch.Tensor): Corresponding gt bboxes.
+            pred_decode (torch.Tensor): Predicted decode bboxes.
+            targets_decode (torch.Tensor): Corresponding gt decode bboxes.
+            fun (str): The function applied to distance. Defaults to None.
+            beta (float): Defaults to 1.0/9.0.
+            eps (float): Defaults to 1e-6.
+
+        Returns:
+            cost
+        """
+        pred = self.preprocess(bboxes)
+        target = self.preprocess(gt_bboxes)
+        
+        xy_p, Sigma_p = pred
+        xy_t, Sigma_t = target
+
+        diff = torch.abs(xy_p - xy_t)
+        xy_loss = torch.where(diff < beta, 0.5 * diff * diff / beta,
+                            diff - 0.5 * beta).sum(dim=-1)
+        Vb_p = 4 * Sigma_p.det().sqrt()
+        Vb_t = 4 * Sigma_t.det().sqrt()
+        K = Sigma_p.bmm((Sigma_p + Sigma_t).inverse())
+        Sigma = Sigma_p - K.bmm(Sigma_p)
+        Vb = 4 * Sigma.det().sqrt()
+        Vb = torch.where(torch.isnan(Vb), torch.full_like(Vb, 0), Vb)
+        KFIoU = Vb / (Vb_p + Vb_t - Vb + eps)
+
+        kf_loss = 1 - KFIoU
+
+        cost = (xy_loss + kf_loss).clamp(0)
+
+        # # num_q x gt x 2
+        # diff = torch.abs(xy_p[..., None, :2] - xy_t)
+
+        # # num_q x gt
+        # xy_loss = torch.where(diff < beta, 0.5 * diff * diff / beta,
+        #                     diff - 0.5 * beta).sum(dim=-1)
+        
+        # # sigma_p:num_q x 2 x 2, sigma_t:gt x 2 x 2
+        # Vb_p = 4 * Sigma_p.det().sqrt()
+        # Vb_t = 4 * Sigma_t.det().sqrt()
+
+        # # whr_distance: num_q x gt
+        # whr_distance = Sigma_p.diagonal(dim1=-2, dim2=-1).sum(dim=-1)
+        # whr_distance = whr_distance[..., None] + Sigma_t.diagonal(
+        #     dim1=-2, dim2=-1).sum(dim=-1)
+
+        
+        # # _t = Sigma_p[:, None, ...].matmul(Sigma_t)
+        # # _t_tr = _t.diagonal(dim1=-2, dim2=-1).sum(dim=-1)
+        # # _t_det_sqrt = (Sigma_p[:, None, ...].det() * Sigma_t.det()).clamp(0).sqrt()
+        # # whr_distance = whr_distance + (-2) * (
+        # #     (_t_tr + 2 * _t_det_sqrt).clamp(0).sqrt())
+
+        # # distance = (xy_distance + alpha * alpha * whr_distance).clamp(0).sqrt()
+
+        # # --------
+        # K = Sigma_p[:, None, ...]*((whr_distance).inverse())
+        # # Sigma = Sigma_p[:, None, ...] - K.bmm(Sigma_p[:, None, ...])
+        # # K = Sigma_p[:, None, ...].bmm((whr_distance).inverse())
+        # #####################
+        # K = Sigma_p[:, None, ...].bmm((Sigma_p+ Sigma_t).inverse())
+        # Sigma = Sigma_p[:, None, ...] - K.bmm(Sigma_p[:, None, ...])
+        # Vb = 4 * Sigma.det().sqrt()
+        # Vb = torch.where(torch.isnan(Vb), torch.full_like(Vb, 0), Vb)
+        # KFIoU = Vb / (Vb_p + Vb_t - Vb + eps)
+
+        # kf_loss = 1 - KFIoU
+
+        # cost = (xy_loss + kf_loss).clamp(0)
+
+        return cost * self.weight

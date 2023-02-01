@@ -10,18 +10,20 @@ from collections import defaultdict
 from functools import partial
 from multiprocessing import get_context
 
+from collections import OrderedDict
 import mmcv
 import numpy as np
+from mmcv import print_log
 import torch
 from mmcv.ops import nms_rotated
 from mmdet.datasets.custom import CustomDataset
 
-from mmrotate.core import eval_rbbox_map, obb2poly_np, poly2obb_np
+from mmrotate.core import eval_rbbox_map, obb2poly_np, poly2obb_np, obb2poly, obb2poly_np_data
 from .builder import ROTATED_DATASETS
 
 
 @ROTATED_DATASETS.register_module()
-class ARIRANGDataset(CustomDataset):
+class AITODDataset(CustomDataset):
     """ARIRANG dataset for detection.
 
     Args:
@@ -33,7 +35,7 @@ class ARIRANGDataset(CustomDataset):
     # CLASSES = ('small-ship', 'large-ship', 'civilian-aircraft', 'military-aircraft', 'small-car', 'bus', 'truck', 'train', 'crane', 'bridge', 
     #         'oil-tank', 'dam','outdoor-playground', 'helipad', 'roundabout')
 # 'indoor-playground','outdoor-playground', 'helipad', 'roundabout', 'helicopter' , 'individual-container', 'grouped-container' , 'swimming-pool' , 'etc')
-    CLASSES = ('small-ship', 'large-ship', 'civilian-aircraft', 'military-aircraft', 'small-car', 'bus', 'truck', 'train')
+    CLASSES = ('airplane', 'bridge', 'storage-tank', 'ship', 'swimming-pool', 'vehicle', 'person', 'wind-mill')
     # PALETTE = [(165, 42, 42), (189, 183, 107), (0, 255, 0), (255, 0, 0),
     #            (138, 43, 226), (255, 128, 0), (255, 0, 255), (0, 255, 255),
     #            (255, 193, 193), (0, 51, 153), (255, 250, 205), (0, 139, 139),
@@ -55,7 +57,7 @@ class ARIRANGDataset(CustomDataset):
         self.version = version
         self.difficulty = difficulty
 
-        super(ARIRANGDataset, self).__init__(ann_file, pipeline, **kwargs)
+        super(AITODDataset, self).__init__(ann_file, pipeline, **kwargs)
 
     def __len__(self):
         """Total number of samples of data."""
@@ -95,6 +97,7 @@ class ARIRANGDataset(CustomDataset):
                 gt_bboxes_ignore = []
                 gt_labels_ignore = []
                 gt_polygons_ignore = []
+                
 
                 if os.path.getsize(ann_file) == 0:
                     continue
@@ -103,23 +106,34 @@ class ARIRANGDataset(CustomDataset):
                     s = f.readlines()
                     for si in s:
                         bbox_info = si.split()
-                        poly = np.array(bbox_info[:8], dtype=np.float32)
                         
+                        poly1 = np.array(bbox_info[:4], dtype=np.float32)
+                        poly1 = np.append(poly1, np.array([0]))
+                        x0, y0, x1, y1, a = poly1
+                        x = x0 + (x1-x0)/2
+                        y = y0 + (y1-y0)/2
+                        w = (x1-x0)
+                        h = (y1-y0)
+                        poly1 = [x,y,w,h,a]
+
+                        
+                        x0,y0,x1,y1,x2,y2,x3,y3 = obb2poly_np_data(poly1, self.version)
+
+                        poly = [x0,y0,x1,y1,x2,y2,x3,y3]
+                      
+                        poly = np.array(poly[:8],dtype=np.float32)
+
                         try:
                             x, y, w, h, a = poly2obb_np(poly, self.version)
+                      
                         except:  # noqa: E722
                             continue
-                        cls_name = bbox_info[8]
-                        difficulty = int(bbox_info[9])
-                        # label = cls_map[cls_name]
-
-                        ##### cls 15개로 처리
-                        # if cls_name == 'indoor-playground' or 'helicopter' or 'individual-container'or 'grouped-container' or 'swimming-pool' or 'etc':
-                        #     label = 999
-                        # else:
-
+                        cls_name = bbox_info[4]
+                      
+                        area = int(w*h)
+                        # if 1024<area <= (1e5**2):
                         #     label = cls_map[cls_name]
-                        if cls_name not in cls_map or difficulty > self.difficulty:
+                        if cls_name not in cls_map:
                             pass
 
                         # if difficulty > self.difficulty:
@@ -128,10 +142,13 @@ class ARIRANGDataset(CustomDataset):
                         else:
                             label = cls_map[cls_name]
                             gt_bboxes.append([x, y, w, h, a])
+                        
                             gt_labels.append(label)
                             gt_polygons.append(poly)
+                        # else:
+                        #     continue
 
-
+               
                 if gt_bboxes:
                     data_info['ann']['bboxes'] = np.array(
                         gt_bboxes, dtype=np.float32)
@@ -181,12 +198,19 @@ class ARIRANGDataset(CustomDataset):
         """
         self.flag = np.zeros(len(self), dtype=np.uint8)
 
+# iou_thr=[0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95],
+# vt, tiny, small, medium
+# scale_ranges=[0**2, 8**2]
+# scale_ranges=[8**2,16**2]
+# scale_ranges=[16**2, 32**2]
+# scale_ranges=[32**2,1e5**2]
+
     def evaluate(self,
                  results,
                  metric='mAP',
                  logger=None,
-                 proposal_nums=(100, 300, 1000),
-                 iou_thr=0.5,
+                 proposal_nums=(100, 300, 1500),
+                 iou_thr=[0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95],
                  scale_ranges=None,
                  nproc=4):
         """Evaluate the dataset.
@@ -215,18 +239,26 @@ class ARIRANGDataset(CustomDataset):
         if metric not in allowed_metrics:
             raise KeyError(f'metric {metric} is not supported')
         annotations = [self.get_ann_info(i) for i in range(len(self))]
-        eval_results = {}
+        eval_results = OrderedDict()
+        iou_thrs = [iou_thr] if isinstance(iou_thr, float) else iou_thr
         if metric == 'mAP':
-            assert isinstance(iou_thr, float)
-            mean_ap, _ = eval_rbbox_map(
-                results,
-                annotations,
-                scale_ranges=scale_ranges,
-                iou_thr=iou_thr,
-                dataset=self.CLASSES,
-                logger=logger,
-                nproc=nproc)
-            eval_results['mAP'] = mean_ap
+            assert isinstance(iou_thrs, list)
+            mean_aps = []
+            for iou_thr in iou_thrs:
+                print_log(f'\n{"-" * 15}iou_thr: {iou_thr}{"-" * 15}')
+                mean_ap, _ = eval_rbbox_map(
+                    results,
+                    annotations,
+                    scale_ranges=scale_ranges,
+                    iou_thr=iou_thr,
+                    dataset=self.CLASSES,
+                    logger=logger,
+                    nproc=nproc)
+                mean_aps.append(mean_ap)
+                eval_results[f'AP{int(iou_thr * 100):02d}'] = round(mean_ap, 3)
+            eval_results['mAP'] = sum(mean_aps) / len(mean_aps)
+            eval_results.move_to_end('mAP', last=False)
+
         else:
             raise NotImplementedError
 

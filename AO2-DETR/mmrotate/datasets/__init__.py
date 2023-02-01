@@ -7,5 +7,6 @@ from .hrsc import HRSCDataset
 from .dota15 import DOTA15Dataset
 from .sku import SKUDataset
 from .arirang import ARIRANGDataset
+from .ai_tod import AITODDataset
 __all__ = ['SARDataset', 'DOTADataset', 'build_dataset', 'HRSCDataset',
-           'DOTA15Dataset', 'SKUDataset', 'ARIRANGDataset']
+           'DOTA15Dataset', 'SKUDataset', 'ARIRANGDataset', 'AITODDataset']

@@ -36,17 +36,26 @@ def tpfp_default(det_bboxes,
             each array is (num_scales, m).
     """
     # an indicator of ignored gts
+
+    
+    ################## horizontal
+    det_bboxes[:,4:5] = 1.5708
+    ################### horizontal
+
     det_bboxes = np.array(det_bboxes)
     gt_ignore_inds = np.concatenate(
         (np.zeros(gt_bboxes.shape[0], dtype=np.bool),
          np.ones(gt_bboxes_ignore.shape[0], dtype=np.bool)))
     # stack gt_bboxes and gt_bboxes_ignore for convenience
+    
+   
     gt_bboxes = np.vstack((gt_bboxes, gt_bboxes_ignore))
 
     num_dets = det_bboxes.shape[0]
     num_gts = gt_bboxes.shape[0]
     if area_ranges is None:
         area_ranges = [(None, None)]
+    
     num_scales = len(area_ranges)
     # tp and fp are of shape (num_scales, num_gts), each row is tp or fp of
     # a certain scale
@@ -58,6 +67,7 @@ def tpfp_default(det_bboxes,
     if gt_bboxes.shape[0] == 0:
         if area_ranges == [(None, None)]:
             fp[...] = 1
+            
         else:
             raise NotImplementedError
         return tp, fp
@@ -174,14 +184,14 @@ def eval_rbbox_map(det_results,
     num_classes = len(det_results[0])  # positive class num
     area_ranges = ([(rg[0]**2, rg[1]**2) for rg in scale_ranges]
                    if scale_ranges is not None else None)
-
+    
     pool = get_context('spawn').Pool(nproc)
     eval_results = []
     for i in range(num_classes):
         # get gt and det bboxes of this class
         cls_dets, cls_gts, cls_gts_ignore = get_cls_results(
             det_results, annotations, i)
-
+       
         # compute tp and fp for each image with multiple processes
         tpfp = pool.starmap(
             tpfp_default,
@@ -226,6 +236,7 @@ def eval_rbbox_map(det_results,
             'precision': precisions,
             'ap': ap
         })
+        
     pool.close()
     if scale_ranges is not None:
         # shape (num_classes, num_scales)
